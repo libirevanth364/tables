@@ -194,6 +194,11 @@ class PublicRowOCSController extends AOCSController {
 			if (!is_array($data)) {
 				return $this->handleBadRequestError(new BadRequestError('Invalid data input'));
 			}
+			try {
+				$rowData = RowDataInput::fromApiInput($data)->toArray();
+			} catch (\InvalidArgumentException $e) {
+				return $this->handleBadRequestError(new BadRequestError('Invalid data input: ' . $e->getMessage(), 0, $e));
+			}
 
 			$viewId = $share->getNodeType() === 'view' ? $share->getNodeId() : null;
 			$tableId = $share->getNodeType() === 'table' ? $share->getNodeId() : null;
@@ -202,7 +207,7 @@ class PublicRowOCSController extends AOCSController {
 				throw new InternalError('Cannot update row without table or view provided');
 			}
 
-			$row = $this->rowService->updateSet($rowId, $viewId, $data, '', $tableId);
+			$row = $this->rowService->updateSet($rowId, $viewId, $rowData, '', $tableId);
 			return new DataResponse($this->rowService->formatRowsForPublicShare([$row])[0]);
 		} catch (PermissionError $e) {
 			return $this->handlePermissionError($e);

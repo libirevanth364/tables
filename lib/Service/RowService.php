@@ -406,15 +406,13 @@ class RowService extends SuperService {
 
 			// check if it is allowed to insert a value for the requested column
 			if (!$column && $viewId) {
-				throw new InternalError('Column with id ' . $entry['columnId'] . ' is not part of view with id ' . $viewId);
+				throw new BadRequestError('Column with id ' . $entry['columnId'] . ' is not part of view with id ' . $viewId);
 			} elseif (!$column && $tableId) {
-				throw new InternalError('Column with id ' . $entry['columnId'] . ' is not part of table with id ' . $tableId);
+				throw new BadRequestError('Column with id ' . $entry['columnId'] . ' is not part of table with id ' . $tableId);
 			}
 
 			if (!$column) {
-				$e = new \Exception('No column found, can not parse value.');
-				$this->logger->error($e->getMessage(), ['exception' => $e]);
-				throw new InternalError(static::class . ' - ' . __FUNCTION__ . ': ' . $e->getMessage());
+				throw new BadRequestError('Column with id ' . $entry['columnId'] . ' does not exist.');
 			}
 
 			if (!empty($readOnlyColumns[$entry['columnId']])) {

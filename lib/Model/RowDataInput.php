@@ -8,6 +8,7 @@
 namespace OCA\Tables\Model;
 
 use ArrayAccess;
+use InvalidArgumentException;
 use Iterator;
 use function current;
 use function key;
@@ -25,9 +26,9 @@ class RowDataInput implements ArrayAccess, Iterator {
 	protected array $data = [];
 
 	/**
-	 * @param array|float|int|null|string $value
+	 * @param array|bool|float|int|null|string $value
 	 */
-	public function add(int $columnId, array|string|int|float|null $value): self {
+	public function add(int $columnId, array|bool|string|int|float|null $value): self {
 		$this->data[] = [self::DATA_KEY => $columnId, self::DATA_VAL => $value];
 		return $this;
 	}
@@ -90,5 +91,62 @@ class RowDataInput implements ArrayAccess, Iterator {
 			$newRowData->add((int)$value['columnId'], $value['value']);
 		}
 		return $newRowData;
+	}
+
+	/**
+	 * Parse API row input in either the documented column-ID map format or the
+	 * list format used by the web client.
+	 *
+	 * @throws InvalidArgumentException
+	 */
+	public static function fromApiInput(array $data): self {
+		$newRowData = new self();
+
+		if (array_is_list($data)) {
+			foreach ($data as $entry) {
+				if (!is_array($entry) || !array_key_exists('columnId', $entry) || !array_key_exists('value', $entry)) {
+					throw new InvalidArgumentException('Each row data entry must contain a columnId and a value.');
+				}
+				$newRowData->add(self::parseColumnId($entry['columnId']), self::parseValue($entry['value']));
+			}
+
+			return $newRowData;
+		}
+
+		foreach ($data as $columnId => $value) {
+			$newRowData->add(self::parseColumnId($columnId), self::parseValue($value));
+		}
+
+		return $newRowData;
+	}
+
+	/**
+	 * @return list<array{columnId: int, value: mixed}>
+	 */
+	public function toArray(): array {
+		return $this->data;
+	}
+
+	private static function parseColumnId(mixed $columnId): int {
+		if (is_int($columnId) && $columnId > 0) {
+			return $columnId;
+		}
+
+		if (is_string($columnId) && preg_match('/^[1-9]\d*$/D', $columnId) === 1) {
+			$validatedColumnId = filter_var($columnId, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+			if ($validatedColumnId !== false) {
+				return $validatedColumnId;
+			}
+		}
+
+		throw new InvalidArgumentException('Column identifiers must be positive integers.');
+	}
+
+	private static function parseValue(mixed $value): array|bool|string|int|float|null {
+		if (is_array($value) || is_bool($value) || is_string($value) || is_int($value) || is_float($value) || $value === null) {
+			return $value;
+		}
+
+		throw new InvalidArgumentException('Row values must be strings, numbers, booleans, arrays, or null.');
 	}
 }

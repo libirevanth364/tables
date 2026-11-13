@@ -1772,6 +1772,121 @@ class FeatureContext implements Context {
 	}
 
 	/**
+	 * @When user :user updates the last created row using v2 on :nodeType :nodeAlias with following values
+	 */
+	public function userUpdatesLastCreatedRowUsingV2(string $user, string $nodeType, string $nodeAlias, TableNode $properties): void {
+		$this->setCurrentUser($user);
+		$props = [];
+		foreach ($properties->getRows() as $row) {
+			$columnId = $this->collectionManager->getByAlias('column', $row[0])['id'];
+			$props[$columnId] = $row[1];
+		}
+
+		$nodeId = $this->collectionManager->getByAlias($nodeType, $nodeAlias)['id'];
+		$url = sprintf('/apps/tables/api/2/%ss/%d/rows/%d', $nodeType, $nodeId, $this->rowId);
+		$this->sendOcsRequest('PUT', $url, ['data' => ['invalid-column' => 'invalid']]);
+		Assert::assertEquals(400, $this->response->getStatusCode());
+		$this->sendOcsRequest('PUT', $url, ['data' => ['2147483647' => 'invalid']]);
+		Assert::assertEquals(400, $this->response->getStatusCode());
+
+		$this->sendOcsRequest('PUT', $url, ['data' => $props]);
+		Assert::assertEquals(200, $this->response->getStatusCode());
+		$row = $this->getDataFromResponse($this->response)['ocs']['data'];
+		$this->assertRowContainsValues($row, $props);
+
+		$listData = [];
+		foreach ($props as $columnId => $value) {
+			$listData[] = ['columnId' => $columnId, 'value' => $value];
+		}
+		$this->sendOcsRequest('PUT', $url, ['data' => $listData]);
+		Assert::assertEquals(200, $this->response->getStatusCode());
+		$row = $this->getDataFromResponse($this->response)['ocs']['data'];
+		$this->assertRowContainsValues($row, $props);
+	}
+
+	/**
+	 * @When user :user tries to update the last created row using v2 on :nodeType :nodeAlias with following values
+	 */
+	public function userTriesToUpdateLastCreatedRowUsingV2(string $user, string $nodeType, string $nodeAlias, TableNode $properties): void {
+		$this->setCurrentUser($user);
+		$props = [];
+		foreach ($properties->getRows() as $row) {
+			$columnId = $this->collectionManager->getByAlias('column', $row[0])['id'];
+			$props[$columnId] = $row[1];
+		}
+
+		$nodeId = $this->collectionManager->getByAlias($nodeType, $nodeAlias)['id'];
+		$url = sprintf('/apps/tables/api/2/%ss/%d/rows/%d', $nodeType, $nodeId, $this->rowId);
+		$this->sendOcsRequest('PUT', $url, ['data' => $props]);
+	}
+
+	/**
+	 * @When user :user updates the last created row through a public link using v2 with following values
+	 */
+	public function userUpdatesLastCreatedRowThroughPublicLinkUsingV2(string $user, TableNode $properties): void {
+		$this->setCurrentUser($user);
+		$props = [];
+		foreach ($properties->getRows() as $row) {
+			$columnId = $this->collectionManager->getByAlias('column', $row[0])['id'];
+			$props[$columnId] = $row[1];
+		}
+
+		$this->sendOcsRequest('POST', sprintf('/apps/tables/api/2/tables/%d/share', $this->tableId));
+		$shareToken = $this->getDataFromResponse($this->response)['ocs']['data']['shareToken'];
+		$this->sendRequest('GET', sprintf('/apps/tables/api/1/tables/%d/shares', $this->tableId));
+		$shares = $this->getDataFromResponse($this->response);
+		$linkShares = array_values(array_filter($shares, static fn (array $share): bool => $share['receiverType'] === 'link'));
+		Assert::assertNotEmpty($linkShares);
+
+		$shareId = $linkShares[0]['id'];
+		$this->sendRequest('PUT', '/apps/tables/api/1/shares/' . $shareId, [
+			'permissionType' => 'update',
+			'permissionValue' => true,
+		]);
+		Assert::assertEquals(200, $this->response->getStatusCode());
+
+		$this->setCurrentUser('guest-public-share');
+		$url = sprintf('/apps/tables/api/2/public/%s/rows/%d', $shareToken, $this->rowId);
+		$this->sendOcsRequest('PUT', $url, ['data' => ['invalid-column' => 'invalid']]);
+		Assert::assertEquals(400, $this->response->getStatusCode());
+		$this->sendOcsRequest('PUT', $url, ['data' => ['2147483647' => 'invalid']]);
+		Assert::assertEquals(400, $this->response->getStatusCode());
+
+		$this->sendOcsRequest('PUT', $url, ['data' => $props]);
+		Assert::assertEquals(200, $this->response->getStatusCode());
+		$row = $this->getDataFromResponse($this->response)['ocs']['data'];
+		$this->assertRowContainsValues($row, $props);
+
+		$this->setCurrentUser($user);
+		$this->sendRequest('PUT', '/apps/tables/api/1/shares/' . $shareId, [
+			'permissionType' => 'update',
+			'permissionValue' => false,
+		]);
+		Assert::assertEquals(200, $this->response->getStatusCode());
+
+		$this->setCurrentUser('guest-public-share');
+		$this->sendOcsRequest('PUT', $url, ['data' => $props]);
+		Assert::assertEquals(403, $this->response->getStatusCode());
+
+		$this->setCurrentUser($user);
+	}
+
+	/**
+	 * @param array<string, mixed> $row
+	 * @param array<int, string> $expectedValues
+	 */
+	private function assertRowContainsValues(array $row, array $expectedValues): void {
+		$rowValues = [];
+		foreach ($row['data'] as $cell) {
+			$rowValues[$cell['columnId']] = $cell['value'];
+		}
+		foreach ($expectedValues as $columnId => $value) {
+			Assert::assertArrayHasKey($columnId, $rowValues);
+			Assert::assertEquals($value, $rowValues[$columnId]);
+		}
+	}
+
+	/**
 	 * @Then user deletes last created row
 	 */
 	public function deleteRow(): void {

@@ -130,6 +130,11 @@ class RowOCSController extends AOCSController {
 		if (!is_array($data)) {
 			return $this->handleBadRequestError(new BadRequestError('Cannot update row: data input is invalid.'));
 		}
+		try {
+			$rowData = RowDataInput::fromApiInput($data)->toArray();
+		} catch (\InvalidArgumentException $e) {
+			return $this->handleBadRequestError(new BadRequestError('Cannot update row: ' . $e->getMessage(), 0, $e));
+		}
 		$iNodeType = ConversionHelper::stringNodeType2Const($nodeCollection);
 		$tableId = $viewId = null;
 		if ($iNodeType === Application::NODE_TYPE_TABLE) {
@@ -140,13 +145,13 @@ class RowOCSController extends AOCSController {
 		try {
 			if ($tableId !== null && $this->federationService->isNodeFederated($tableId, 'table')) {
 				$table = $this->tableService->find($nodeId, true);
-				return new DataResponse($this->federationService->updateRow($table, $rowId, $data));
+				return new DataResponse($this->federationService->updateRow($table, $rowId, $rowData));
 			}
 			if ($viewId !== null && $this->federationService->isNodeFederated($viewId, 'view')) {
 				$view = $this->viewService->find($nodeId, false, $this->userId);
-				return new DataResponse($this->federationService->updateRow($view, $rowId, $data));
+				return new DataResponse($this->federationService->updateRow($view, $rowId, $rowData));
 			}
-			return new DataResponse($this->rowService->updateSet($rowId, $viewId, $data, $this->userId, $tableId)->jsonSerialize());
+			return new DataResponse($this->rowService->updateSet($rowId, $viewId, $rowData, $this->userId, $tableId)->jsonSerialize());
 		} catch (BadRequestError $e) {
 			return $this->handleBadRequestError($e);
 		} catch (NotFoundError $e) {

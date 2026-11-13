@@ -642,6 +642,37 @@ Feature: APIv2
     Then the reported status is 200
 
   @api2 @rows
+  Scenario: Update rows using the documented column map
+    Given table "Rows update check" with emoji "👨🏻‍💻" exists for user "participant1-v2" as "update-table" via v2
+    And column "update-column" exists with following properties
+      | type    | text |
+      | subtype | line |
+    And user "participant1-v2" create view "Rows update view" with emoji "⚡️" for "update-table" as "update-view"
+    And user "participant1-v2" sets columnSettings "update-column" to view "update-view"
+    And row exists using v2 with following values
+      | update-column | before |
+    When user "participant1-v2" updates the last created row using v2 on "view" "update-view" with following values
+      | update-column | after |
+    Then the reported status is 200
+    And user "participant1-v2" shares view "update-view" with "participant2-v2"
+    And user "participant1-v2" sets permission "update" to "false"
+    When user "participant2-v2" tries to update the last created row using v2 on "view" "update-view" with following values
+      | update-column | unauthorized |
+    Then the reported status is 403
+
+  @api2 @rows
+  Scenario: Update rows through a public link using the documented column map
+    Given table "Public rows update check" with emoji "👨🏻‍💻" exists for user "participant1-v2" as "public-update-table" via v2
+    And column "public-update-column" exists with following properties
+      | type    | text |
+      | subtype | line |
+    And row exists using v2 with following values
+      | public-update-column | before |
+    When user "participant1-v2" updates the last created row through a public link using v2 with following values
+      | public-update-column | after |
+    Then the reported status is 200
+
+  @api2 @rows
   Scenario: Try to create rows via v2 with permissions
     Given table "Rows check" with emoji "👨🏻‍💻" exists for user "participant1-v2" as "base1" via v2
     And column "one" exists with following properties
